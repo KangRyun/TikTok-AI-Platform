@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok 인증 완료</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #ff0050, #00f2ea);
+        }
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 fade-in">
+        <!-- 로딩 상태 -->
+        <div id="loading" class="text-center">
+            <div class="loading w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">인증 처리 중...</h2>
+            <p class="text-gray-600">잠시만 기다려 주세요.</p>
+        </div>
+
+        <!-- 성공 상태 -->
+        <div id="success" class="text-center hidden">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-check text-green-500 text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">인증 성공!</h2>
+            <p class="text-gray-600 mb-4">TikTok 계정 연동이 완료되었습니다.</p>
+            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                <p class="text-sm text-gray-600 mb-2">인증 코드:</p>
+                <code id="authCode" class="bg-gray-200 px-2 py-1 rounded text-sm break-all"></code>
+            </div>
+            <button onclick="closeWindow()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+                <i class="fas fa-times mr-2"></i>창 닫기
+            </button>
+        </div>
+
+        <!-- 오류 상태 -->
+        <div id="error" class="text-center hidden">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">인증 실패</h2>
+            <p class="text-gray-600 mb-4">TikTok 계정 연동에 실패했습니다.</p>
+            <div class="bg-red-50 rounded-lg p-4 mb-4">
+                <p class="text-sm text-red-600 mb-2">오류 내용:</p>
+                <span id="errorMessage" class="text-sm text-red-700"></span>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="retryAuth()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
+                    <i class="fas fa-redo mr-2"></i>다시 시도
+                </button>
+                <button onclick="closeWindow()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                    <i class="fas fa-times mr-2"></i>닫기
+                </button>
+            </div>
+        </div>
+
+        <!-- 정보 섹션 -->
+        <div class="mt-6 pt-4 border-t border-gray-200">
+            <p class="text-xs text-gray-500 text-center">
+                <i class="fas fa-shield-alt mr-1"></i>
+                이 페이지는 TikTok OAuth 인증 완료 후 자동으로 리디렉션됩니다.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // URL 파라미터 파싱 함수
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        // 인증 결과 처리
+        function processAuthResult() {
+            const authCode = getUrlParameter('code');
+            const error = getUrlParameter('error');
+            const errorDescription = getUrlParameter('error_description');
+            const state = getUrlParameter('state');
+
+            setTimeout(() => {
+                document.getElementById('loading').classList.add('hidden');
+
+                if (error) {
+                    // 오류 발생
+                    document.getElementById('error').classList.remove('hidden');
+                    document.getElementById('errorMessage').textContent = 
+                        errorDescription || error || '알 수 없는 오류가 발생했습니다.';
+                    
+                    // 오류 로그
+                    console.error('TikTok OAuth Error:', {
+                        error: error,
+                        description: errorDescription,
+                        state: state
+                    });
+                } else if (authCode) {
+                    // 성공
+                    document.getElementById('success').classList.remove('hidden');
+                    document.getElementById('authCode').textContent = authCode;
+                    
+                    // 성공 로그
+                    console.log('TikTok OAuth Success:', {
+                        code: authCode,
+                        state: state
+                    });
+
+                    // 부모 창에 결과 전달 (팝업인 경우)
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'TIKTOK_AUTH_SUCCESS',
+                            code: authCode,
+                            state: state
+                        }, '*');
+                    }
+
+                    // 로컬 스토리지에 임시 저장
+                    localStorage.setItem('tiktok_auth_code', authCode);
+                    localStorage.setItem('tiktok_auth_timestamp', Date.now().toString());
+                } else {
+                    // 파라미터 없음
+                    document.getElementById('error').classList.remove('hidden');
+                    document.getElementById('errorMessage').textContent = '인증 파라미터가 없습니다.';
+                }
+            }, 1500); // 로딩 애니메이션 표시
+        }
+
+        // 다시 시도
+        function retryAuth() {
+            window.location.href = '/';
+        }
+
+        // 창 닫기
+        function closeWindow() {
+            if (window.opener) {
+                window.close();
+            } else {
+                window.location.href = '/';
+            }
+        }
+
+        // 페이지 로드 시 실행
+        document.addEventListener('DOMContentLoaded', processAuthResult);
+
+        // 메시지 리스너 (팝업과 부모 창 통신용)
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'CLOSE_AUTH_POPUP') {
+                window.close();
+            }
+        });
+
+        // 페이지 언로드 시 정리
+        window.addEventListener('beforeunload', function() {
+            // 30분 후 자동 삭제를 위한 타이머 설정
+            const timestamp = localStorage.getItem('tiktok_auth_timestamp');
+            if (timestamp && Date.now() - parseInt(timestamp) > 30 * 60 * 1000) {
+                localStorage.removeItem('tiktok_auth_code');
+                localStorage.removeItem('tiktok_auth_timestamp');
+            }
+        });
+    </script>
+</body>
+</html>
